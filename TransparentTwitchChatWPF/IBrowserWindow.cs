@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace TransparentTwitchChatWPF
 {
-    interface BrowserWindow
+    interface IBrowserWindow
     {
-        void hideBorders();
-        void drawBorders();
+        void HideBorders();
+        void DrawBorders();
         void ToggleBorderVisibility();
         void ResetWindowState();
 
