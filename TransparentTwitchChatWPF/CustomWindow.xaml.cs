@@ -17,7 +17,7 @@ namespace TransparentTwitchChatWPF
     /// <summary>
     /// Interaction logic for CustomWindow.xaml
     /// </summary>
-    public partial class CustomWindow : Window, BrowserWindow
+    public partial class CustomWindow : Window, IBrowserWindow
     {
 
         MainWindow mainWindow;
@@ -76,10 +76,10 @@ namespace TransparentTwitchChatWPF
 
         private void btnHide_Click(object sender, RoutedEventArgs e)
         {
-            hideBorders();
+            HideBorders();
         }
 
-        public void drawBorders()
+        public void DrawBorders()
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             WindowHelper.SetWindowExDefault(hwnd);
@@ -102,7 +102,7 @@ namespace TransparentTwitchChatWPF
             this.webView.Focusable = true;
         }
 
-        public void hideBorders()
+        public void HideBorders()
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             WindowHelper.SetWindowExTransparent(hwnd);
@@ -128,14 +128,14 @@ namespace TransparentTwitchChatWPF
         public void ToggleBorderVisibility()
         {
             if (hiddenBorders)
-                drawBorders();
+                DrawBorders();
             else
-                hideBorders();
+                HideBorders();
         }
 
         public void ResetWindowState()
         {
-            drawBorders();
+            DrawBorders();
             this.WindowState = WindowState.Normal;
             this.Left = 10;
             this.Top = 10;

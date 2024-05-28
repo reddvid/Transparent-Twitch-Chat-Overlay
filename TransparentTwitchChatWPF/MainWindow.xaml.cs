@@ -16,19 +16,19 @@ using Squirrel;
 /*
  * v1.0.5
  * > Memory leak with settings window?
- * 
+ *
  * v1.0.4
  * - Remove that little x
  * - Channel point redemptions working
  * - Background opacity fixes
- * 
+ *
  * v1.0.3
  * - Fix for KapChat not working
- * 
+ *
  * v1.0.0
  * - Added Squirrel for installing and updating the app
  * > Option to disable update checks from the message
- * 
+ *
  * v0.10.0
  * > Lock down app if no runtime installed
  * >> Display a panel with link or auto-download and install
@@ -43,7 +43,7 @@ using Squirrel;
  * > Deal with popup windows
  * > Reset settings button
  * > Tips and hints in the chat window, turn off in settings
- * 
+ *
  * v0.9.5
  * - The uninstaller will now remove stored settings/data
  * - Audio for browser enabled by default
@@ -52,11 +52,11 @@ using Squirrel;
  * - Can now change the folder for sound clips
  * - Added an entry in the context menu to open Dev Tools
  * - CefSharp (Chromium) updated to 117.2.20
- * 
+ *
  * v0.9.4
  * - Filtering: can block users now
  * - Automatically checks for updates on start (Can be disabled in settings)
- * 
+ *
  * v0.9.3
  * - Added a setting to allow multiple instances
  * - Fix for crash when adding a widget with a long URL
@@ -64,25 +64,25 @@ using Squirrel;
  * ~ Known Issues:
  * ~ Jump lists no longer work if you allow multiple instances (it just launches another instance)
  * ~ Can't login to the popout Twitch, this is caused by Twitch blocking login for unsupported browsers
- * 
+ *
  * v0.9.2
  * - jChat support (this allows BetterTTV, FrankerFaceZ and 7TV emotes)
  * - CefSharp (Chromium) updated to 99.2.9
  * - Twitch popout with BTTV and FFZ emotes support - PR by: github.com/r-o-b-o-t-o
  * - Twitch popout will keep your login session - PR by: github.com/r-o-b-o-t-o
- * 
+ *
  * v0.9.1
  * - TwitchLib support for points redemption
  * - Filter settings will let you highlight certain usernames/mods/vip
  * - Possible bug fix for startup crash Load() issue.
  * - System tray icon will always be enabled for now (to prevent no interaction with app)
- * 
+ *
  * v0.9.0
  * - Chat filter settings for KapChat version
  * - Filter by allowed usernames, all mods, or all VIPs
  * - You can configure the filter settings under Chat settings and click the Open Chat Filter Settings button
  *
- * 
+ *
  * TODO:
  * > Custom CSS for widgets
  * Add opacity and zoom levels into the General settings
@@ -95,7 +95,7 @@ using Squirrel;
  * Allowing you to chat from the app, quickly (hotkey to enable it?)
  * Custom javascript
  *
- * 
+ *
  */
 
 namespace TransparentTwitchChatWPF
@@ -110,49 +110,40 @@ namespace TransparentTwitchChatWPF
     using Microsoft.Web.WebView2.Wpf;
     using System.Windows.Documents;
     using System.Windows.Navigation;
-    using System.Runtime.InteropServices.ComTypes;
-    using NAudio.SoundFont;
     using System.Reflection;
     using NHotkey.Wpf;
     using NHotkey;
-    using ModernWpf.Controls.Primitives;
-    using System.ComponentModel;
-    using System.Runtime.CompilerServices;
-    using System.Windows.Media.TextFormatting;
-    using ModernWpf.Controls;
-    using System.Threading;
-    using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window, BrowserWindow
+    public partial class MainWindow : Window, IBrowserWindow
     {
-        private WebView2 webView;
-        private bool hasWebView2Runtime = false;
+        private WebView2 _webView;
+        private bool _hasWebView2Runtime = false;
 
-        private System.Timers.Timer _timer;
-        private System.Timers.Timer checkWebView2Timer;
+        private readonly System.Timers.Timer _timer;
+        private System.Timers.Timer _checkWebView2Timer;
         private int _timerTick = 0;
 
         [DllImport("user32.dll")]
-        static extern IntPtr GetForegroundWindow();
-
-        /// 
+        private static extern IntPtr GetForegroundWindow();
 
         //SolidColorBrush bgColor;
-        Thickness noBorderThickness = new Thickness(0);
-        Thickness borderThickness = new Thickness(4);
-        int cOpacity = 0;
-        
-        private bool _hiddenBorders = false;
-        private bool _interactable = true;
+        private readonly Thickness _noBorderThickness = new Thickness(0);
+        private readonly Thickness _borderThickness = new Thickness(4);
+        private int _bgOpacityLevel = 0;
+
+        private bool _isBordersHidden = false;
+
+        private bool _isInteractable = true;
+
         //GeneralSettings genSettings;
-        TrackingConfiguration genSettingsTrackingConfig;
-        JsCallbackFunctions jsCallbackFunctions;
+        private readonly TrackingConfiguration _genSettingsTrackingConfig;
+        private JsCallbackFunctions _jsCallbackFunctions;
 
         //StringCollection custom_windows = new StringCollection();
-        List<BrowserWindow> windows = new List<BrowserWindow>();
+        List<IBrowserWindow> windows = new List<IBrowserWindow>();
 
         private TwitchPubSub _pubSub;
         private bool _isPubSubConnected = false;
@@ -179,8 +170,8 @@ namespace TransparentTwitchChatWPF
             this.currentChat = new CustomURLChat(ChatTypes.CustomURL); // TODO: initializing here needed?
 
             Services.Tracker.Configure(this).IdentifyAs("State").Apply();
-            this.genSettingsTrackingConfig = Services.Tracker.Configure(SettingsSingleton.Instance.genSettings);
-            this.genSettingsTrackingConfig.IdentifyAs("MainWindow").Apply();
+            this._genSettingsTrackingConfig = Services.Tracker.Configure(SettingsSingleton.Instance.genSettings);
+            this._genSettingsTrackingConfig.IdentifyAs("MainWindow").Apply();
 
             _timer = new System.Timers.Timer(1000);
             _timer.Elapsed += _timer_Elapsed;
@@ -219,10 +210,12 @@ namespace TransparentTwitchChatWPF
                             SettingsSingleton.Instance.genSettings.ToggleBordersHotkey.Modifiers,
                             OnHotKeyToggleBorders);
 
-                        menuItemToggleBorders.Header = $"Toggle Borders ({SettingsSingleton.Instance.genSettings.ToggleBordersHotkey.ToString()})";
+                        menuItemToggleBorders.Header =
+                            $"Toggle Borders ({SettingsSingleton.Instance.genSettings.ToggleBordersHotkey.ToString()})";
                     }
                     catch (Exception)
-                    { }
+                    {
+                    }
                 }
             }
 
@@ -238,10 +231,12 @@ namespace TransparentTwitchChatWPF
                             SettingsSingleton.Instance.genSettings.ToggleInteractableHotkey.Modifiers,
                             OnHotKeyToggleInteraction);
 
-                        menuItemToggleInteractable.Header = $"Toggle Interactable ({SettingsSingleton.Instance.genSettings.ToggleInteractableHotkey.ToString()})";
+                        menuItemToggleInteractable.Header =
+                            $"Toggle Interactable ({SettingsSingleton.Instance.genSettings.ToggleInteractableHotkey.ToString()})";
                     }
                     catch (Exception)
-                    { }
+                    {
+                    }
                 }
             }
 
@@ -256,17 +251,19 @@ namespace TransparentTwitchChatWPF
                             SettingsSingleton.Instance.genSettings.BringToTopHotkey.Key,
                             SettingsSingleton.Instance.genSettings.BringToTopHotkey.Modifiers,
                             OnHotKeyBringToTopTimer);
-                        menuItemBringToTop.Header = $"Bring to Top ({SettingsSingleton.Instance.genSettings.BringToTopHotkey.ToString()})";
+                        menuItemBringToTop.Header =
+                            $"Bring to Top ({SettingsSingleton.Instance.genSettings.BringToTopHotkey.ToString()})";
                     }
                     catch (Exception)
-                    { }
+                    {
+                    }
                 }
             }
         }
 
         private void OnHotKeyToggleInteraction(object sender, HotkeyEventArgs e)
         {
-            SetInteractable(!this.webView.Focusable);
+            SetInteractable(!this._webView.Focusable);
             e.Handled = true;
         }
 
@@ -303,19 +300,20 @@ namespace TransparentTwitchChatWPF
 
         private void ShowWebViewDownloadLink()
         {
-            hasWebView2Runtime = false;
+            _hasWebView2Runtime = false;
 
-            if (checkWebView2Timer == null)
+            if (_checkWebView2Timer == null)
             {
-                checkWebView2Timer = new System.Timers.Timer(2500);
-                checkWebView2Timer.Elapsed += CheckWebView2Timer_Elapsed;
-                checkWebView2Timer.Start();
+                _checkWebView2Timer = new System.Timers.Timer(2500);
+                _checkWebView2Timer.Elapsed += CheckWebView2Timer_Elapsed;
+                _checkWebView2Timer.Start();
             }
 
             this.overlay.Opacity = 1;
             TextBlock textBlock = new TextBlock
             {
-                Text = "Please download and install the WebView2 Runtime to use this app.\nThe app will refresh after install.\n\n",
+                Text =
+                    "Please download and install the WebView2 Runtime to use this app.\nThe app will refresh after install.\n\n",
                 TextWrapping = TextWrapping.Wrap,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -372,50 +370,55 @@ namespace TransparentTwitchChatWPF
             }
 
             // setup webview
-            webView = new WebView2
+            _webView = new WebView2
             {
                 DefaultBackgroundColor = System.Drawing.Color.Transparent
             };
 
-            hasWebView2Runtime = true;
-            if (checkWebView2Timer != null)
+            _hasWebView2Runtime = true;
+            if (_checkWebView2Timer != null)
             {
-                checkWebView2Timer.Stop();
-                checkWebView2Timer.Dispose();
-                checkWebView2Timer = null;
+                _checkWebView2Timer.Stop();
+                _checkWebView2Timer.Dispose();
+                _checkWebView2Timer = null;
             }
 
             this.overlay.Child = null;
 
-            webView.CoreWebView2InitializationCompleted += webView_CoreWebView2InitializationCompleted;
-            webView.ContentLoading += webView_ContentLoading;
-            webView.NavigationStarting += webView_NavigationStarting;
-            webView.NavigationCompleted += webView_NavigationCompleted;
-            webView.WebMessageReceived += webView_WebMessageReceived;
+            _webView.CoreWebView2InitializationCompleted += webView_CoreWebView2InitializationCompleted;
+            _webView.ContentLoading += webView_ContentLoading;
+            _webView.NavigationStarting += webView_NavigationStarting;
+            _webView.NavigationCompleted += webView_NavigationCompleted;
+            _webView.WebMessageReceived += webView_WebMessageReceived;
 
-            Grid.SetRow(webView, 1);
-            Grid.SetRowSpan(webView, 1);
-            Grid.SetZIndex(webView, 0);
+            Grid.SetRow(_webView, 1);
+            Grid.SetRowSpan(_webView, 1);
+            Grid.SetZIndex(_webView, 0);
 
-            this.mainWindowGrid.Children.Add(webView);
+            this.mainWindowGrid.Children.Add(_webView);
 
             var options = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required");
             options.AdditionalBrowserArguments = "--disable-background-timer-throttling";
-            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TransparentTwitchChatWPF");
-            CoreWebView2Environment cwv2Environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
-            await webView.EnsureCoreWebView2Async(cwv2Environment);
-            
-            this.jsCallbackFunctions = new JsCallbackFunctions();
-            webView.CoreWebView2.AddHostObjectToScript("jsCallbackFunctions", this.jsCallbackFunctions);
+            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "TransparentTwitchChatWPF");
+            CoreWebView2Environment cwv2Environment =
+                await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+            await _webView.EnsureCoreWebView2Async(cwv2Environment);
+
+            this._jsCallbackFunctions = new JsCallbackFunctions();
+            _webView.CoreWebView2.AddHostObjectToScript("jsCallbackFunctions", this._jsCallbackFunctions);
 
             SetupBrowser();
         }
 
-        private void webView_CoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
+        private void webView_CoreWebView2InitializationCompleted(object sender,
+            CoreWebView2InitializationCompletedEventArgs e)
         {
             if (!e.IsSuccess)
             {
-                MessageBox.Show(GetWindow(this), "Failed to initialize WebView2:\n" + e.InitializationException.ToString(), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(GetWindow(this),
+                    "Failed to initialize WebView2:\n" + e.InitializationException.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -465,10 +468,12 @@ namespace TransparentTwitchChatWPF
                 {
                     ResetWindowPosition();
 
-                    if (MessageBox.Show("Show settings folder?", "Settings Folder", MessageBoxButton.YesNo, MessageBoxImage.Question)
+                    if (MessageBox.Show("Show settings folder?", "Settings Folder", MessageBoxButton.YesNo,
+                            MessageBoxImage.Question)
                         == MessageBoxResult.Yes)
                     {
-                        System.Diagnostics.Process.Start((Services.Tracker.StoreFactory as Jot.Storage.JsonFileStoreFactory).StoreFolderPath);
+                        System.Diagnostics.Process.Start(
+                            (Services.Tracker.StoreFactory as Jot.Storage.JsonFileStoreFactory).StoreFolderPath);
                     }
                 }
             }
@@ -478,15 +483,13 @@ namespace TransparentTwitchChatWPF
 
         public void SetInteractable(bool interactable)
         {
-            this.Dispatcher.Invoke(() => {
-                this.webView.Focusable = interactable;
-            });
+            this.Dispatcher.Invoke(() => { this._webView.Focusable = interactable; });
 
-            _interactable = interactable;
+            _isInteractable = interactable;
             var hwnd = new WindowInteropHelper(this).Handle;
 
             if (interactable)
-            {   
+            {
                 WindowHelper.SetWindowExDefault(hwnd);
                 this.AppTitleBar.Visibility = Visibility.Visible;
 
@@ -494,7 +497,7 @@ namespace TransparentTwitchChatWPF
                 this.Activate();
                 this.Topmost = true;
 
-                if (this.cOpacity <= 0)
+                if (this._bgOpacityLevel <= 0)
                     this.overlay.Opacity = 0.01;
             }
             else
@@ -502,7 +505,7 @@ namespace TransparentTwitchChatWPF
                 WindowHelper.SetWindowExTransparent(hwnd);
                 this.AppTitleBar.Visibility = Visibility.Collapsed;
 
-                if (this.cOpacity <= 0)
+                if (this._bgOpacityLevel <= 0)
                     this.overlay.Opacity = 0;
             }
 
@@ -510,7 +513,7 @@ namespace TransparentTwitchChatWPF
             StartCheckForegroundWindowTimer();
         }
 
-        public void drawBorders()
+        public void DrawBorders()
         {
             this.ShowInTaskbar = true;
             SetInteractable(SettingsSingleton.Instance.genSettings.AllowInteraction);
@@ -525,12 +528,12 @@ namespace TransparentTwitchChatWPF
 
             this.AppTitleBar.Visibility = Visibility.Visible;
             this.FooterBar.Visibility = Visibility.Visible;
-            this.webView.SetValue(Grid.RowSpanProperty, 1);
+            this._webView.SetValue(Grid.RowSpanProperty, 1);
             this.BorderBrush = Brushes.Black;
-            this.BorderThickness = this.borderThickness;
+            this.BorderThickness = this._borderThickness;
             this.ResizeMode = System.Windows.ResizeMode.CanResizeWithGrip;
 
-            _hiddenBorders = false;
+            _isBordersHidden = false;
 
             this.Topmost = false;
             this.Activate();
@@ -539,7 +542,7 @@ namespace TransparentTwitchChatWPF
             CheckForegroundWindow();
         }
 
-        public void hideBorders()
+        public void HideBorders()
         {
             if (SettingsSingleton.Instance.genSettings.HideTaskbarIcon)
                 this.ShowInTaskbar = false;
@@ -554,15 +557,15 @@ namespace TransparentTwitchChatWPF
 
             this.AppTitleBar.Visibility = Visibility.Collapsed;
             this.FooterBar.Visibility = Visibility.Collapsed;
-            this.webView.SetValue(Grid.RowSpanProperty, 2);
+            this._webView.SetValue(Grid.RowSpanProperty, 2);
             this.BorderBrush = Brushes.Transparent;
-            this.BorderThickness = this.noBorderThickness;
+            this.BorderThickness = this._noBorderThickness;
             this.ResizeMode = System.Windows.ResizeMode.NoResize;
 
             this.WindowStyle = WindowStyle.None;
             this.Background = Brushes.Transparent;
 
-            _hiddenBorders = true;
+            _isBordersHidden = true;
 
             this.Topmost = false;
             this.Activate();
@@ -573,9 +576,9 @@ namespace TransparentTwitchChatWPF
 
         public void ToggleBorderVisibility()
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            if (_hiddenBorders)
+            if (_isBordersHidden)
                 DrawBordersForAllWindows();
             else
                 HideBordersForAllWindows();
@@ -583,28 +586,28 @@ namespace TransparentTwitchChatWPF
 
         public void DrawBordersForAllWindows()
         {
-            drawBorders();
-            foreach (BrowserWindow win in this.windows)
-                win.drawBorders();
+            DrawBorders();
+            foreach (IBrowserWindow win in this.windows)
+                win.DrawBorders();
         }
 
         public void HideBordersForAllWindows()
         {
-            hideBorders();
-            foreach (BrowserWindow win in this.windows)
-                win.hideBorders();
+            HideBorders();
+            foreach (IBrowserWindow win in this.windows)
+                win.HideBorders();
         }
 
         public void ResetWindowPosition()
         {
             this.ResetWindowState();
-            foreach (BrowserWindow win in this.windows)
+            foreach (IBrowserWindow win in this.windows)
                 win.ResetWindowState();
         }
 
         public void ResetWindowState()
         {
-            drawBorders();
+            DrawBorders();
             this.WindowState = WindowState.Normal;
             this.Left = 10;
             this.Top = 10;
@@ -614,7 +617,7 @@ namespace TransparentTwitchChatWPF
 
         private void SetCustomChatAddress(string url)
         {
-            this.webView.CoreWebView2.Navigate(url);
+            this._webView.CoreWebView2.Navigate(url);
         }
 
         private void SetChatAddress(string chatChannel)
@@ -624,10 +627,14 @@ namespace TransparentTwitchChatWPF
                 username = chatChannel.Split('/').Last();
 
             string fade = SettingsSingleton.Instance.genSettings.FadeTime;
-            if (!SettingsSingleton.Instance.genSettings.FadeChat) { fade = "false"; }
+            if (!SettingsSingleton.Instance.genSettings.FadeChat)
+            {
+                fade = "false";
+            }
 
             string theme = string.Empty;
-            if ((SettingsSingleton.Instance.genSettings.ThemeIndex >= 0) && (SettingsSingleton.Instance.genSettings.ThemeIndex < KapChat.Themes.Count))
+            if ((SettingsSingleton.Instance.genSettings.ThemeIndex >= 0) &&
+                (SettingsSingleton.Instance.genSettings.ThemeIndex < KapChat.Themes.Count))
                 theme = KapChat.Themes[SettingsSingleton.Instance.genSettings.ThemeIndex];
 
             string url = @"https://nightdev.com/hosted/obschat/?";
@@ -636,7 +643,7 @@ namespace TransparentTwitchChatWPF
             url += @"&fade=" + fade;
             url += @"&bot_activity=" + (!SettingsSingleton.Instance.genSettings.BlockBotActivity).ToString();
             url += @"&prevent_clipping=false";
-            this.webView.CoreWebView2.Navigate(url);
+            this._webView.CoreWebView2.Navigate(url);
         }
 
         public void ShowInputFadeDialogBox()
@@ -681,63 +688,65 @@ namespace TransparentTwitchChatWPF
 
         private void MenuItem_ToggleBorderVisible(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            foreach (BrowserWindow window in this.windows)
+            foreach (IBrowserWindow window in this.windows)
             {
                 if (window != null)
                 {
-                    if (this._hiddenBorders)
-                        window.drawBorders();
+                    if (this._isBordersHidden)
+                        window.DrawBorders();
                     else
-                        window.hideBorders();
+                        window.HideBorders();
                 }
             }
+
             ToggleBorderVisibility();
         }
 
         private void MenuItem_ShowSettings(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
             ShowSettingsWindow();
         }
 
         private void MenuItem_VisitWebsite(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Process.Start("https://github.com/baffler/Transparent-Twitch-Chat-Overlay/releases/latest");
+            System.Diagnostics.Process.Start(
+                "https://github.com/baffler/Transparent-Twitch-Chat-Overlay/releases/latest");
         }
 
         private void btnHide_Click(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
-            hideBorders();
+            if (!_hasWebView2Runtime) return;
+            HideBorders();
         }
 
         private void MenuItem_ZoomIn(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
             if (SettingsSingleton.Instance.genSettings.ZoomLevel < 4.0)
             {
                 SetZoomFactor(SettingsSingleton.Instance.genSettings.ZoomLevel + 0.1);
-                SettingsSingleton.Instance.genSettings.ZoomLevel = this.webView.ZoomFactor;
+                SettingsSingleton.Instance.genSettings.ZoomLevel = this._webView.ZoomFactor;
             }
         }
 
         private void MenuItem_ZoomOut(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
             if (SettingsSingleton.Instance.genSettings.ZoomLevel > 0.1)
             {
                 SetZoomFactor(SettingsSingleton.Instance.genSettings.ZoomLevel - 0.1);
-                SettingsSingleton.Instance.genSettings.ZoomLevel = this.webView.ZoomFactor;
+                SettingsSingleton.Instance.genSettings.ZoomLevel = this._webView.ZoomFactor;
             }
         }
 
         private void MenuItem_ZoomReset(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
             SetZoomFactor(1);
             SettingsSingleton.Instance.genSettings.ZoomLevel = 1;
         }
@@ -747,13 +756,12 @@ namespace TransparentTwitchChatWPF
             if (zoom <= 0.1) zoom = 0.1;
             if (zoom > 4) zoom = 4;
 
-            this.webView.ZoomFactor = zoom;
+            this._webView.ZoomFactor = zoom;
             SettingsSingleton.Instance.genSettings.ZoomLevel = zoom;
         }
 
         private void webView_NavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
-            
         }
 
         private async void webView_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -765,8 +773,9 @@ namespace TransparentTwitchChatWPF
 
             Debug.WriteLine("Navigation completed: " + e.HttpStatusCode);
 
-            this.webView.Dispatcher.Invoke(new Action(() => {
-                    SetZoomFactor(SettingsSingleton.Instance.genSettings.ZoomLevel); 
+            this._webView.Dispatcher.Invoke(new Action(() =>
+            {
+                SetZoomFactor(SettingsSingleton.Instance.genSettings.ZoomLevel);
             }));
 
             if (SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.TwitchPopout)
@@ -774,7 +783,7 @@ namespace TransparentTwitchChatWPF
 
             string js = this.currentChat.SetupJavascript();
             if (!string.IsNullOrEmpty(js))
-                await this.webView.ExecuteScriptAsync(js);
+                await this._webView.ExecuteScriptAsync(js);
 
             // Custom CSS
             string script = string.Empty;
@@ -784,7 +793,7 @@ namespace TransparentTwitchChatWPF
                 script = InsertCustomCSS2(css);
 
             if (!string.IsNullOrEmpty(script))
-                await this.webView.ExecuteScriptAsync(script);
+                await this._webView.ExecuteScriptAsync(script);
 
             this.PushNewMessage("Loading...");
 
@@ -801,6 +810,7 @@ namespace TransparentTwitchChatWPF
             {
                 InsertCustomJavaScriptFromUrl("https://cdn.betterttv.net/betterttv.js");
             }
+
             if (SettingsSingleton.Instance.genSettings.FrankerFaceZ)
             {
                 // Observe for FrankerFaceZ's reskin stylesheet
@@ -845,6 +855,7 @@ namespace TransparentTwitchChatWPF
                     Debug.WriteLine(ex.Message);
                 }
             }
+
             if (SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.jChat)
             {
                 try
@@ -887,7 +898,7 @@ namespace TransparentTwitchChatWPF
         {
             try
             {
-                await this.webView.ExecuteScriptAsync(JS);
+                await this._webView.ExecuteScriptAsync(JS);
             }
             catch (Exception e)
             {
@@ -910,7 +921,8 @@ namespace TransparentTwitchChatWPF
         {
             if (SettingsSingleton.Instance.genSettings.CustomWindows.Contains(URL))
             {
-                MessageBox.Show("That URL already exists as a window.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("That URL already exists as a window.", "Error", MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
             else
             {
@@ -921,7 +933,7 @@ namespace TransparentTwitchChatWPF
 
         private void CreateNewWindowDialog()
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
             Input_Custom inputDialog = new Input_Custom();
             if (inputDialog.ShowDialog() == true)
             {
@@ -931,7 +943,7 @@ namespace TransparentTwitchChatWPF
 
         private void MenuItem_ClickNewWindow(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
             CreateNewWindowDialog();
         }
 
@@ -940,11 +952,13 @@ namespace TransparentTwitchChatWPF
             string path = SettingsSingleton.Instance.genSettings.SoundClipsFolder;
             if (path == "Default")
             {
-                path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\\assets\\";
+                path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) +
+                       "\\assets\\";
             }
             else if (!Directory.Exists(path))
             {
-                path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\\assets\\";
+                path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) +
+                       "\\assets\\";
             }
 
             if (!path.EndsWith("\\")) path += "\\";
@@ -954,14 +968,14 @@ namespace TransparentTwitchChatWPF
 
         private void ShowSettingsWindow()
         {
-            if (!hasWebView2Runtime)
+            if (!_hasWebView2Runtime)
             {
                 if (
-                MessageBox.Show(
-                                "Please download and install the WebView2 Runtime to use this app.\nRestart this app after you install.",
-                                "WebView2 Runtime Required",
-                                MessageBoxButton.OK, MessageBoxImage.Error
-                                )
+                    MessageBox.Show(
+                        "Please download and install the WebView2 Runtime to use this app.\nRestart this app after you install.",
+                        "WebView2 Runtime Required",
+                        MessageBoxButton.OK, MessageBoxImage.Error
+                    )
                     == MessageBoxResult.OK)
                 {
                     Process.Start(new ProcessStartInfo
@@ -1019,7 +1033,8 @@ namespace TransparentTwitchChatWPF
                     SettingsSingleton.Instance.genSettings.Username = config.Username;
 
                     if (!string.IsNullOrEmpty(SettingsSingleton.Instance.genSettings.Username))
-                        SetCustomChatAddress("https://www.twitch.tv/popout/" + SettingsSingleton.Instance.genSettings.Username + "/chat?popout=");
+                        SetCustomChatAddress("https://www.twitch.tv/popout/" +
+                                             SettingsSingleton.Instance.genSettings.Username + "/chat?popout=");
 
                     SettingsSingleton.Instance.genSettings.BetterTtv = config.BetterTtv;
                     SettingsSingleton.Instance.genSettings.FrankerFaceZ = config.FrankerFaceZ;
@@ -1050,17 +1065,18 @@ namespace TransparentTwitchChatWPF
 
 
                     if (SettingsSingleton.Instance.genSettings.ChatNotificationSound.ToLower() == "none")
-                        this.jsCallbackFunctions.MediaFile = string.Empty;
+                        this._jsCallbackFunctions.MediaFile = string.Empty;
                     else
                     {
-                        string file = GetSoundClipsFolder() + SettingsSingleton.Instance.genSettings.ChatNotificationSound;
+                        string file = GetSoundClipsFolder() +
+                                      SettingsSingleton.Instance.genSettings.ChatNotificationSound;
                         if (System.IO.File.Exists(file))
                         {
-                            this.jsCallbackFunctions.MediaFile = file;
+                            this._jsCallbackFunctions.MediaFile = file;
                         }
                         else
                         {
-                            this.jsCallbackFunctions.MediaFile = string.Empty;
+                            this._jsCallbackFunctions.MediaFile = string.Empty;
                         }
                     }
                 }
@@ -1083,17 +1099,18 @@ namespace TransparentTwitchChatWPF
 
 
                     if (SettingsSingleton.Instance.genSettings.ChatNotificationSound.ToLower() == "none")
-                        this.jsCallbackFunctions.MediaFile = string.Empty;
+                        this._jsCallbackFunctions.MediaFile = string.Empty;
                     else
                     {
-                        string file = GetSoundClipsFolder() + SettingsSingleton.Instance.genSettings.ChatNotificationSound;
+                        string file = GetSoundClipsFolder() +
+                                      SettingsSingleton.Instance.genSettings.ChatNotificationSound;
                         if (System.IO.File.Exists(file))
                         {
-                            this.jsCallbackFunctions.MediaFile = file;
+                            this._jsCallbackFunctions.MediaFile = file;
                         }
                         else
                         {
-                            this.jsCallbackFunctions.MediaFile = string.Empty;
+                            this._jsCallbackFunctions.MediaFile = string.Empty;
                         }
                     }
                 }
@@ -1105,12 +1122,17 @@ namespace TransparentTwitchChatWPF
                 SettingsSingleton.Instance.genSettings.AllowInteraction = config.AllowInteraction;
                 SettingsSingleton.Instance.genSettings.RedemptionsEnabled = config.RedemptionsEnabled;
 
-                this.taskbarControl.Visibility = Visibility.Visible; //config.EnableTrayIcon ? Visibility.Visible : Visibility.Hidden;
+                if (!taskbarControl.IsVisible)
+                {
+                    this.taskbarControl.Visibility =
+                        Visibility.Visible; //config.EnableTrayIcon ? Visibility.Visible : Visibility.Hidden;
+                }
+
                 this.ShowInTaskbar = !config.HideTaskbarIcon;
 
-                if (!this._hiddenBorders)
+                if (!this._isBordersHidden)
                 {
-                    this.webView.Focusable = true;
+                    this._webView.Focusable = true;
                     if (config.AllowInteraction)
                         SetInteractable(true);
                 }
@@ -1118,7 +1140,7 @@ namespace TransparentTwitchChatWPF
                 SetupOrReplaceHotkeys();
 
                 // Save the new changes for settings
-                this.genSettingsTrackingConfig.Persist();
+                this._genSettingsTrackingConfig.Persist();
             }
         }
 
@@ -1129,7 +1151,7 @@ namespace TransparentTwitchChatWPF
             newWindow.Show();
 
             if (hideBorder)
-                newWindow.hideBorders();
+                newWindow.HideBorders();
         }
 
         public void RemoveCustomWindow(string url)
@@ -1184,7 +1206,8 @@ namespace TransparentTwitchChatWPF
 
                 if (mainWindow != null)
                 {
-                    var titleBarControl = mainWindow.FindChildByType<DependencyObject>("ModernWpf.Controls.Primitives.TitleBarControl");
+                    var titleBarControl =
+                        mainWindow.FindChildByType<DependencyObject>("ModernWpf.Controls.Primitives.TitleBarControl");
                     if (titleBarControl != null)
                     {
                         _closeButton = titleBarControl.FindChild<Button>("CloseButton");
@@ -1217,7 +1240,9 @@ namespace TransparentTwitchChatWPF
         {
             try
             {
-                using (var updateManager = await UpdateManager.GitHubUpdateManager(@"https://github.com/baffler/Transparent-Twitch-Chat-Overlay"))
+                using (var updateManager =
+                       await UpdateManager.GitHubUpdateManager(
+                           @"https://github.com/baffler/Transparent-Twitch-Chat-Overlay"))
                 {
                     var updateInfo = await updateManager.CheckForUpdate();
 
@@ -1240,18 +1265,23 @@ namespace TransparentTwitchChatWPF
 
                         if (string.Equals(currentVersion, nextVersion)) return;
 
-                        if (MessageBox.Show($"New Version [v{nextVersion}] is available.\n(Currently on [v{currentVersion}])\n\nWould you like to update now?",
-                            "New Version Available",
-                            MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) == MessageBoxResult.Yes)
+                        if (MessageBox.Show(
+                                $"New Version [v{nextVersion}] is available.\n(Currently on [v{currentVersion}])\n\nWould you like to update now?",
+                                "New Version Available",
+                                MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) ==
+                            MessageBoxResult.Yes)
                         {
                             try
                             {
                                 await updateManager.UpdateApp();
-                                MessageBox.Show("Updated successfully! You will need to restart the app to apply the update.", "Update Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                                MessageBox.Show(
+                                    "Updated successfully! You will need to restart the app to apply the update.",
+                                    "Update Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                             }
                             catch (Exception ex)
                             {
-                                MessageBox.Show("Failed to update:\n" + ex.Message, "Error while Updating", MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBox.Show("Failed to update:\n" + ex.Message, "Error while Updating",
+                                    MessageBoxButton.OK, MessageBoxImage.Error);
                             }
                         }
                     }
@@ -1263,9 +1293,9 @@ namespace TransparentTwitchChatWPF
             }
         }
 
-        private void webView_ContentLoading(object sender, Microsoft.Web.WebView2.Core.CoreWebView2ContentLoadingEventArgs e)
+        private void webView_ContentLoading(object sender,
+            Microsoft.Web.WebView2.Core.CoreWebView2ContentLoadingEventArgs e)
         {
-            
         }
 
         private void SetupBrowser()
@@ -1273,26 +1303,26 @@ namespace TransparentTwitchChatWPF
             if (SettingsSingleton.Instance.genSettings.ZoomLevel <= 0)
                 SettingsSingleton.Instance.genSettings.ZoomLevel = 1;
 
-            webView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
+            _webView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
             //this.bgColor = new SolidColorBrush(Color.FromArgb(SettingsSingleton.Instance.genSettings.OpacityLevel, 0, 0, 0));
-            this.cOpacity = SettingsSingleton.Instance.genSettings.OpacityLevel;
-            SetBackgroundOpacity(this.cOpacity);
+            this._bgOpacityLevel = SettingsSingleton.Instance.genSettings.OpacityLevel;
+            SetBackgroundOpacity(this._bgOpacityLevel);
 
             if (SettingsSingleton.Instance.genSettings.AutoHideBorders)
-                hideBorders();
+                HideBorders();
             else
-                drawBorders();
+                DrawBorders();
 
             if (SettingsSingleton.Instance.genSettings.ChatNotificationSound.ToLower() != "none")
             {
                 string file = GetSoundClipsFolder() + SettingsSingleton.Instance.genSettings.ChatNotificationSound;
                 if (System.IO.File.Exists(file))
                 {
-                    this.jsCallbackFunctions.MediaFile = file;
+                    this._jsCallbackFunctions.MediaFile = file;
                 }
                 else
                 {
-                    this.jsCallbackFunctions.MediaFile = string.Empty;
+                    this._jsCallbackFunctions.MediaFile = string.Empty;
                 }
             }
 
@@ -1302,18 +1332,22 @@ namespace TransparentTwitchChatWPF
                     OpenNewCustomWindow(url, "", SettingsSingleton.Instance.genSettings.AutoHideBorders);
             }
 
-            if ((SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.CustomURL) && (!string.IsNullOrWhiteSpace(SettingsSingleton.Instance.genSettings.CustomURL)))
+            if ((SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.CustomURL) &&
+                (!string.IsNullOrWhiteSpace(SettingsSingleton.Instance.genSettings.CustomURL)))
             {
                 this.currentChat = new CustomURLChat(ChatTypes.CustomURL);
                 SetCustomChatAddress(SettingsSingleton.Instance.genSettings.CustomURL);
             }
-            else if ((SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.TwitchPopout) && (!string.IsNullOrEmpty(SettingsSingleton.Instance.genSettings.Username)))
+            else if ((SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.TwitchPopout) &&
+                     (!string.IsNullOrEmpty(SettingsSingleton.Instance.genSettings.Username)))
             {
                 this.currentChat = new CustomURLChat(ChatTypes.TwitchPopout);
-                SetCustomChatAddress("https://www.twitch.tv/popout/" + SettingsSingleton.Instance.genSettings.Username + "/chat?popout=");
+                SetCustomChatAddress("https://www.twitch.tv/popout/" + SettingsSingleton.Instance.genSettings.Username +
+                                     "/chat?popout=");
             }
             else if (!string.IsNullOrWhiteSpace(SettingsSingleton.Instance.genSettings.Username))
-            { // TODO: need to clean this up to determine which type of chat to load better
+            {
+                // TODO: need to clean this up to determine which type of chat to load better
                 if (SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.KapChat)
                 {
                     this.currentChat = new Chats.KapChat();
@@ -1328,11 +1362,12 @@ namespace TransparentTwitchChatWPF
                 {
                     Uri startupPath = new Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase);
                     string address = System.IO.Path.GetDirectoryName(startupPath.LocalPath) + "\\index.html";
-                    webView.CoreWebView2.Navigate(address);
+                    _webView.CoreWebView2.Navigate(address);
                 }
             }
             else if (SettingsSingleton.Instance.genSettings.ChatType == (int)ChatTypes.jChat)
-            { // TODO: need to clean this up to determine which type of chat to load better
+            {
+                // TODO: need to clean this up to determine which type of chat to load better
                 this.currentChat = new jChat();
                 SetCustomChatAddress(SettingsSingleton.Instance.genSettings.jChatURL);
             }
@@ -1340,7 +1375,7 @@ namespace TransparentTwitchChatWPF
             {
                 Uri startupPath = new Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase);
                 string address = System.IO.Path.GetDirectoryName(startupPath.LocalPath) + "\\index.html";
-                webView.CoreWebView2.Navigate(address);
+                _webView.CoreWebView2.Navigate(address);
 
                 //CefSharp.WebBrowserExtensions.LoadHtml(Browser1,
                 //"<html><body style=\"font-size: x-large; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; \">Load a channel to connect to by right-clicking the tray icon.<br /><br />You can move and resize the window, then press the [o] button to hide borders, or use the tray icon menu.</body></html>");
@@ -1361,10 +1396,12 @@ namespace TransparentTwitchChatWPF
         {
             ResetWindowPosition();
 
-            if (MessageBox.Show("Show settings folder?", "Settings Folder", MessageBoxButton.YesNo, MessageBoxImage.Question)
+            if (MessageBox.Show("Show settings folder?", "Settings Folder", MessageBoxButton.YesNo,
+                    MessageBoxImage.Question)
                 == MessageBoxResult.Yes)
             {
-                System.Diagnostics.Process.Start((Services.Tracker.StoreFactory as Jot.Storage.JsonFileStoreFactory).StoreFolderPath);
+                System.Diagnostics.Process.Start((Services.Tracker.StoreFactory as Jot.Storage.JsonFileStoreFactory)
+                    .StoreFolderPath);
             }
         }
 
@@ -1379,46 +1416,47 @@ namespace TransparentTwitchChatWPF
             double remapped = Remap(Opacity);
             if (remapped <= 0)
             {
-                if (_interactable)
+                if (_isInteractable)
                     remapped = 0.01;
                 else
                     remapped = 0;
             }
             else if (remapped >= 1) remapped = 1;
+
             this.overlay.Opacity = remapped;
             this.FooterBar.Opacity = remapped;
         }
 
         private void MenuItem_IncOpacity(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            this.cOpacity += 15;
-            if (this.cOpacity > 255) this.cOpacity = 255;
-            SettingsSingleton.Instance.genSettings.OpacityLevel = (byte)this.cOpacity;
+            this._bgOpacityLevel += 15;
+            if (this._bgOpacityLevel > 255) this._bgOpacityLevel = 255;
+            SettingsSingleton.Instance.genSettings.OpacityLevel = (byte)this._bgOpacityLevel;
             //this.bgColor.Color = Color.FromArgb((byte)this.cOpacity, 0, 0, 0);
-            SetBackgroundOpacity(this.cOpacity);
+            SetBackgroundOpacity(this._bgOpacityLevel);
         }
 
         private void MenuItem_DecOpacity(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            this.cOpacity -= 15;
-            if (this.cOpacity < 0) this.cOpacity = 0;
-            SettingsSingleton.Instance.genSettings.OpacityLevel = (byte)this.cOpacity;
+            this._bgOpacityLevel -= 15;
+            if (this._bgOpacityLevel < 0) this._bgOpacityLevel = 0;
+            SettingsSingleton.Instance.genSettings.OpacityLevel = (byte)this._bgOpacityLevel;
             //this.bgColor.Color = Color.FromArgb((byte)this.cOpacity, 0, 0, 0);
-            SetBackgroundOpacity(this.cOpacity);
+            SetBackgroundOpacity(this._bgOpacityLevel);
         }
 
         private void MenuItem_ResetOpacity(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            this.cOpacity = 0;
+            this._bgOpacityLevel = 0;
             SettingsSingleton.Instance.genSettings.OpacityLevel = 0;
             //this.bgColor.Color = Color.FromArgb(0, 0, 0, 0);
-            SetBackgroundOpacity(this.cOpacity);
+            SetBackgroundOpacity(this._bgOpacityLevel);
         }
 
         private void PushNewMessage(string message = "")
@@ -1427,7 +1465,7 @@ namespace TransparentTwitchChatWPF
 
             if (!string.IsNullOrEmpty(js))
             {
-                this.webView.ExecuteScriptAsync(js);
+                this._webView.ExecuteScriptAsync(js);
             }
         }
 
@@ -1437,7 +1475,7 @@ namespace TransparentTwitchChatWPF
 
             string js = this.currentChat.PushNewChatMessage(message, nick, color);
             if (!string.IsNullOrEmpty(js))
-                this.webView.ExecuteScriptAsync(js);
+                this._webView.ExecuteScriptAsync(js);
         }
 
         private void PushNewMessageDispatcherInvoke(string message = "")
@@ -1446,10 +1484,7 @@ namespace TransparentTwitchChatWPF
 
             if (!string.IsNullOrEmpty(js))
             {
-                this.webView.Dispatcher.Invoke(() =>
-                {
-                    this.webView.ExecuteScriptAsync(js);
-                });
+                this._webView.Dispatcher.Invoke(() => { this._webView.ExecuteScriptAsync(js); });
             }
         }
 
@@ -1458,10 +1493,7 @@ namespace TransparentTwitchChatWPF
             string js = this.currentChat.PushNewChatMessage(message, nick, color);
             if (!string.IsNullOrEmpty(js))
             {
-                this.webView.Dispatcher.Invoke(() =>
-                {
-                    this.webView.ExecuteScriptAsync(js);
-                });
+                this._webView.Dispatcher.Invoke(() => { this._webView.ExecuteScriptAsync(js); });
             }
         }
 
@@ -1486,32 +1518,63 @@ namespace TransparentTwitchChatWPF
             else
             {
                 Debug.WriteLine("Channel ID or OAuth Token is missing.");
-                Debug.WriteLine($"Channel ID: '{SettingsSingleton.Instance.genSettings.ChannelID}' - OAuthToken: '{SettingsSingleton.Instance.genSettings.OAuthToken}'");
+                Debug.WriteLine(
+                    $"Channel ID: '{SettingsSingleton.Instance.genSettings.ChannelID}' - OAuthToken: '{SettingsSingleton.Instance.genSettings.OAuthToken}'");
             }
-
         }
 
         public void DisablePubSubRedemptions()
         {
             if (_pubSub != null)
             {
-                try { _pubSub.OnPubSubServiceConnected -= _pubSub_OnPubSubServiceConnected; }
-                catch { }
-                try { _pubSub.OnPubSubServiceClosed -= _pubSub_OnPubSubServiceClosed; }
-                catch { }
-                try { _pubSub.OnPubSubServiceError -= _pubSub_OnPubSubServiceError; }
-                catch { }
-                try { _pubSub.OnListenResponse -= _pubSub_OnListenResponse; }
-                catch { }
-                try { _pubSub.OnChannelPointsRewardRedeemed -= _pubSub_OnChannelPointsRewardRedeemed; }
-                catch { }
+                try
+                {
+                    _pubSub.OnPubSubServiceConnected -= _pubSub_OnPubSubServiceConnected;
+                }
+                catch
+                {
+                }
 
-                try {
+                try
+                {
+                    _pubSub.OnPubSubServiceClosed -= _pubSub_OnPubSubServiceClosed;
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    _pubSub.OnPubSubServiceError -= _pubSub_OnPubSubServiceError;
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    _pubSub.OnListenResponse -= _pubSub_OnListenResponse;
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    _pubSub.OnChannelPointsRewardRedeemed -= _pubSub_OnChannelPointsRewardRedeemed;
+                }
+                catch
+                {
+                }
+
+                try
+                {
                     _isPubSubConnected = false;
                     if (_isPubSubConnected)
                         _pubSub.Disconnect();
                 }
-                catch (Exception e) {
+                catch (Exception e)
+                {
                     Debug.WriteLine(e.Message);
                 }
             }
@@ -1520,9 +1583,7 @@ namespace TransparentTwitchChatWPF
         private void _pubSub_OnPubSubServiceConnected(object sender, System.EventArgs e)
         {
             Debug.WriteLine("PubSub Service Connected");
-            this.Dispatcher.Invoke(() => {
-                this.PubSubConnectedInit();
-            });
+            this.Dispatcher.Invoke(() => { this.PubSubConnectedInit(); });
         }
 
         private void PubSubConnectedInit()
@@ -1538,7 +1599,8 @@ namespace TransparentTwitchChatWPF
                 }
                 else
                 {
-                    PushNewMessage("PubSub Service Connected, but no OAuth Token found. Try reconnecting your Twitch account in the settings.");
+                    PushNewMessage(
+                        "PubSub Service Connected, but no OAuth Token found. Try reconnecting your Twitch account in the settings.");
                 }
             }
             catch (Exception ex)
@@ -1587,9 +1649,9 @@ namespace TransparentTwitchChatWPF
 
         private void MenuItem_DevToolsClick(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
+            if (!_hasWebView2Runtime) return;
 
-            this.webView.CoreWebView2.OpenDevToolsWindow();
+            this._webView.CoreWebView2.OpenDevToolsWindow();
         }
 
         private void MenuItem_BringToTopTimer(object sender, RoutedEventArgs e)
@@ -1599,8 +1661,8 @@ namespace TransparentTwitchChatWPF
 
         private void MenuItem_ToggleInteractable(object sender, RoutedEventArgs e)
         {
-            if (!hasWebView2Runtime) return;
-            SetInteractable(!this.webView.Focusable);
+            if (!_hasWebView2Runtime) return;
+            SetInteractable(!this._webView.Focusable);
         }
 
         private void Window_Closed(object sender, EventArgs e)
@@ -1608,7 +1670,6 @@ namespace TransparentTwitchChatWPF
             if (!App.IsShuttingDown)
                 ExitApplication();
         }
-        
     }
 
     [ClassInterface(ClassInterfaceType.AutoDual)]
@@ -1618,7 +1679,7 @@ namespace TransparentTwitchChatWPF
         private string _mediaFile;
         private AudioFileReader _audioFileReader;
         private WaveOutEvent _waveOutDevice;
-        
+
         public string MediaFile
         {
             get { return _mediaFile; }
@@ -1698,7 +1759,11 @@ namespace TransparentTwitchChatWPF
                         _waveOutDevice.Play();
                     }
                 }
-            } catch (Exception ex) { MessageBox.Show(ex.Message); }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
         }
 
         public void showMessageBox(string msg)
@@ -1706,95 +1771,56 @@ namespace TransparentTwitchChatWPF
             try
             {
                 MessageBox.Show(msg);
-            } catch { }
+            }
+            catch
+            {
+            }
         }
     }
 
     public class GeneralSettings
     {
-        [Trackable]
-        public StringCollection CustomWindows { get; set; }
-        [Trackable]
-        public string Username { get; set; }
-        [Trackable]
-        public bool FadeChat { get; set; }
-        [Trackable]
-        public string FadeTime { get; set; } // fade time in seconds or "false"
-        [Trackable]
-        public bool BlockBotActivity { get; set; }
-        [Trackable]
-        public string ChatNotificationSound { get; set; }
-        [Trackable]
-        public int ThemeIndex { get; set; }
-        [Trackable]
-        public string CustomCSS { get; set; }
-        [Trackable]
-        public string TwitchPopoutCSS { get; set; }
-        [Trackable]
-        public int ChatType { get; set; }
-        [Trackable]
-        public string CustomURL { get; set; }
-        [Trackable]
-        public double ZoomLevel { get; set; }
-        [Trackable]
-        public byte OpacityLevel { get; set; }
-        [Trackable]
-        public bool AutoHideBorders { get; set; }
-        [Trackable]
-        public bool EnableTrayIcon { get; set; }
-        [Trackable]
-        public bool ConfirmClose { get; set; }
-        [Trackable]
-        public bool HideTaskbarIcon { get; set; }
-        [Trackable]
-        public bool AllowInteraction { get; set; }
-        [Trackable]
-        public double VersionTracker { get; set; }
-        [Trackable]
-        public bool HighlightUsersChat { get; set; }
-        [Trackable]
-        public bool AllowedUsersOnlyChat { get; set; }
-        [Trackable]
-        public bool FilterAllowAllMods { get; set; }
-        [Trackable]
-        public bool FilterAllowAllVIPs { get; set; }
-        [Trackable]
-        public StringCollection AllowedUsersList { get; set; }
-        [Trackable]
-        public StringCollection BlockedUsersList { get; set; }
-        [Trackable]
-        public bool RedemptionsEnabled { get; set; }
-        [Trackable]
-        public string ChannelID { get; set; }
-        [Trackable]
-        public string OAuthToken { get; set; }
-        [Trackable]
-        public bool BetterTtv { get; set; }
-        [Trackable]
-        public bool FrankerFaceZ { get; set; }
-        [Trackable]
-        public string jChatURL { get; set; }
-        [Trackable]
-        public bool CheckForUpdates { get; set; }
-        [Trackable]
-        public Color ChatHighlightColor { get; set; }
-        [Trackable]
-        public Color ChatHighlightModsColor { get; set; }
-        [Trackable]
-        public Color ChatHighlightVIPsColor { get; set; }
-        [Trackable]
-        public float OutputVolume { get; set; }
-        [Trackable]
-        public string DeviceName { get; set; }
-        [Trackable]
-        public int DeviceID { get; set; }
-        [Trackable]
-        public string SoundClipsFolder { get; set; }
-        [Trackable]
-        public Hotkey ToggleBordersHotkey { get; set; }
-        [Trackable]
-        public Hotkey ToggleInteractableHotkey { get; set; }
-        [Trackable]
-        public Hotkey BringToTopHotkey { get; set; }
+        [Trackable] public StringCollection CustomWindows { get; set; }
+        [Trackable] public string Username { get; set; }
+        [Trackable] public bool FadeChat { get; set; }
+        [Trackable] public string FadeTime { get; set; } // fade time in seconds or "false"
+        [Trackable] public bool BlockBotActivity { get; set; }
+        [Trackable] public string ChatNotificationSound { get; set; }
+        [Trackable] public int ThemeIndex { get; set; }
+        [Trackable] public string CustomCSS { get; set; }
+        [Trackable] public string TwitchPopoutCSS { get; set; }
+        [Trackable] public int ChatType { get; set; }
+        [Trackable] public string CustomURL { get; set; }
+        [Trackable] public double ZoomLevel { get; set; }
+        [Trackable] public byte OpacityLevel { get; set; }
+        [Trackable] public bool AutoHideBorders { get; set; }
+        [Trackable] public bool EnableTrayIcon { get; set; }
+        [Trackable] public bool ConfirmClose { get; set; }
+        [Trackable] public bool HideTaskbarIcon { get; set; }
+        [Trackable] public bool AllowInteraction { get; set; }
+        [Trackable] public double VersionTracker { get; set; }
+        [Trackable] public bool HighlightUsersChat { get; set; }
+        [Trackable] public bool AllowedUsersOnlyChat { get; set; }
+        [Trackable] public bool FilterAllowAllMods { get; set; }
+        [Trackable] public bool FilterAllowAllVIPs { get; set; }
+        [Trackable] public StringCollection AllowedUsersList { get; set; }
+        [Trackable] public StringCollection BlockedUsersList { get; set; }
+        [Trackable] public bool RedemptionsEnabled { get; set; }
+        [Trackable] public string ChannelID { get; set; }
+        [Trackable] public string OAuthToken { get; set; }
+        [Trackable] public bool BetterTtv { get; set; }
+        [Trackable] public bool FrankerFaceZ { get; set; }
+        [Trackable] public string jChatURL { get; set; }
+        [Trackable] public bool CheckForUpdates { get; set; }
+        [Trackable] public Color ChatHighlightColor { get; set; }
+        [Trackable] public Color ChatHighlightModsColor { get; set; }
+        [Trackable] public Color ChatHighlightVIPsColor { get; set; }
+        [Trackable] public float OutputVolume { get; set; }
+        [Trackable] public string DeviceName { get; set; }
+        [Trackable] public int DeviceID { get; set; }
+        [Trackable] public string SoundClipsFolder { get; set; }
+        [Trackable] public Hotkey ToggleBordersHotkey { get; set; }
+        [Trackable] public Hotkey ToggleInteractableHotkey { get; set; }
+        [Trackable] public Hotkey BringToTopHotkey { get; set; }
     }
 }
