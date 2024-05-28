@@ -1,15 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace TransparentTwitchChatWPF.Chats
+namespace TransparentTwitchChatWPF.Models.Chat
 {
-    public class CustomURLChat : Chat
+    public class CustomChatUrl : Chat
     {
-        public CustomURLChat(ChatTypes chatType) : base(chatType)
+        public CustomChatUrl(ChatTypes chatType) : base(chatType)
         {
         }
 
